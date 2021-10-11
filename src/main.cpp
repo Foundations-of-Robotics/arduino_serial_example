@@ -11,13 +11,15 @@ using namespace std;
 #define LOWER_BYTE(b) b & 0xff
 #define UPPER_BYTE(b) (b >> 8)
 
-// a structure holdinga messsage packet received from serial
+// a structure holding a messsage packet received from serial
 struct messageData {
     uint8_t motorID;   
     uint8_t commandID; 
     uint16_t _data;
 };
 
+
+//Recieves the data from the ROS pc and saves it to the micro controller
 vector<messageData> readSerialCommunication(){
     //declare our payload variable which holds the data we will be returning
     vector<messageData> payload;
@@ -35,14 +37,15 @@ vector<messageData> readSerialCommunication(){
         return payload;     
     }
     
-    char payloadFooter[payloadSize + 1];
-    _serialPort.readBytes(payloadFooter, payloadSize + 1);
-
-    if(payloadFooter[payloadSize] != 101){ 
+    char payloadFooter[payloadSize];
+    _serialPort.readBytes(payloadFooter, payloadSize);
+    //validates footer
+    uint8_t footer = (uint8_t)payloadFooter[payloadSize-1];
+    if(footer != 101){ 
         _serialPort.flush();
         return payload;     
     }
-
+    //Saves recieved data and performs bitwise operations
     for(int i = 0; i < payloadSize / 4; i++) {
         payload.push_back((messageData){
             .motorID = (uint8_t)payloadFooter[i*4],
@@ -53,33 +56,32 @@ vector<messageData> readSerialCommunication(){
     return payload;
 }
 
+//Sends the data back to ROS PC
 void sendDataBackToRosSystem(vector<messageData> ToSendBack){
   uint8_t headerByte = 199;
   uint8_t payloadSize = ToSendBack.size()*4;
   uint8_t footer = 101;
   uint8_t arrayToSend[payloadSize+3];
-  arrayToSend[0] = headerByte;
-  arrayToSend[1] = payloadSize;
-  arrayToSend[payloadSize+2] = footer;
-
-  int startIndex = 2;
+  int counter = 0;
+  arrayToSend[counter++] = headerByte;
+  arrayToSend[counter++] = payloadSize;
 // Advance the iterator by 2 positions
-  for(int i = 0; i < payloadSize; i++) {
-    arrayToSend[startIndex+(i*4)] = (uint8_t)ToSendBack[i].motorID;
-    arrayToSend[startIndex+(i*4)+1] = (uint8_t)ToSendBack[i].commandID;
-    arrayToSend[startIndex+(i*4)+2] = (uint8_t)UPPER_BYTE(ToSendBack[i]._data);
-    arrayToSend[startIndex+(i*4)+3] = (uint8_t)LOWER_BYTE(ToSendBack[i]._data);
+  for(int i = 0; i < ToSendBack.size(); i++) {
+    arrayToSend[counter++] = (uint8_t)ToSendBack[i].motorID;
+    arrayToSend[counter++] = (uint8_t)ToSendBack[i].commandID;
+    arrayToSend[counter++] = (uint8_t)UPPER_BYTE(ToSendBack[i]._data);
+    arrayToSend[counter++] = (uint8_t)LOWER_BYTE(ToSendBack[i]._data);
   }
 
-  _serialPort.write(arrayToSend,(int)payloadSize+3);
+  arrayToSend[counter++] = footer;
+
+  _serialPort.write(arrayToSend,payloadSize+3);
 }
 
 //Start our main initialization code
 void setup() {
-  //Start the serial port with a baud rate of 115200
-  
+  //start serial port
   _serialPort.begin(115200);
-  _serialPort.println("This is a test line of code to start out communication with and validate our sketch works");
 }
 
 //Define a simple variable which holds our recieved serial messages from the PC
@@ -93,12 +95,12 @@ void loop() {
 
     //read the data and save it to the micro controller
     recievedFromPC = readSerialCommunication();
-    //Next we are simply sending the data back to command
-    //if(recievedFromPC.size()>0)
-    _serialPort.print("reieved data of size ");
-    _serialPort.println(recievedFromPC.size());
-    _serialPort.println("Definitly Recieving Data");
-    //sendDataBackToRosSystem(recievedFromPC);
+    //Next we are simply sending the data back to the PC
+    if(recievedFromPC.size()>0){
+    sendDataBackToRosSystem(recievedFromPC);
+    //empty the list
+    recievedFromPC.clear();
+    }
   }
 
 }
