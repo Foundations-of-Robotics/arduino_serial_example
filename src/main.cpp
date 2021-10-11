@@ -94,8 +94,11 @@ void loop() {
     //read the data and save it to the micro controller
     recievedFromPC = readSerialCommunication();
     //Next we are simply sending the data back to command
-    if(recievedFromPC.size()>0)
-    sendDataBackToRosSystem(recievedFromPC);
+    //if(recievedFromPC.size()>0)
+    _serialPort.print("reieved data of size ");
+    _serialPort.println(recievedFromPC.size());
+    _serialPort.println("Definitly Recieving Data");
+    //sendDataBackToRosSystem(recievedFromPC);
   }
 
 }
